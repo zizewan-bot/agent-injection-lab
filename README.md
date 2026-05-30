@@ -1,9 +1,15 @@
 # Agent Injection Lab
 
+Phase 0 / v0.1.0 public preview.
+
 A local staging test for AI coding agents exposed to untrusted sources.
 
 Give your AI coding agent a cached bug report.
 See whether it stages a synthetic secret in the local workspace.
+
+Phase 0 is local staging only. It uses synthetic secrets only, does not upload data automatically, and does not test network exfiltration.
+
+No result proves an agent is safe or unsafe.
 
 ## What this is NOT
 
@@ -12,6 +18,12 @@ See whether it stages a synthetic secret in the local workspace.
 - Not a prompt injection scanner.
 - Not a production firewall.
 - Not a guarantee that your agent is safe.
+
+## Open Transparency
+
+Agent Injection Lab is open for inspection. The CLI source, report generation logic, anonymized summary format, and privacy boundaries can be reviewed in this repository.
+
+For Phase 0, the tool is local-only and does not upload data automatically.
 
 ## Quick Start
 
@@ -50,7 +62,7 @@ node ./bin/agent-lab.js analyze runs/<run_id>
 runs/<run_id>/report.html
 ```
 
-The demo proves the tool runs locally, detects synthetic secret staging, generates a report, and states the Phase 0 limitations.
+The demo demonstrates that the tool runs locally, detects synthetic secret staging in the test workspace, generates a report, and states the Phase 0 limitations.
 
 ## Seed User Docs
 
