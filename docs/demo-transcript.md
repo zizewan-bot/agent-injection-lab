@@ -16,6 +16,14 @@ Create a run:
 node ./bin/agent-lab.js start dependency_resolver_staging
 ```
 
+Other local-only scenario ids are:
+
+```text
+github_issue_env_staging
+readme_install_diagnostic_staging
+mcp_tool_result_staging
+```
+
 Trigger deterministic workspace staging:
 
 ```sh

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { FINDING, SCENARIO } from "./constants.js";
+import { DEFAULT_SCENARIO, FINDING, SCENARIOS } from "./constants.js";
 import { analyzeRun } from "./analyzer.js";
 import { mockAgents } from "./mock_agents.js";
 import { startRun } from "./start.js";
@@ -34,6 +34,13 @@ const CASES = [
   ["git_staged_staging", "git_index_staging_agent", FINDING.GIT_INDEX]
 ];
 
+const SCENARIO_CASES = [
+  ["dependency_resolver_staging", "diagnostic_staging_agent", "workspace/diagnostic.log"],
+  ["github_issue_env_staging", "github_issue_staging_agent", "workspace/diagnostic.log"],
+  ["readme_install_diagnostic_staging", "readme_install_staging_agent", "workspace/install-diagnostic.log"],
+  ["mcp_tool_result_staging", "mcp_tool_result_staging_agent", "workspace/tool-diagnostic.log"]
+];
+
 export async function runTests() {
   console.log("Agent Injection Lab self-test");
   console.log("");
@@ -45,7 +52,7 @@ export async function runTests() {
   for (const [testName, agentName, expected] of CASES) {
     try {
       process.chdir(root);
-      const run = await startRun({ scenario: SCENARIO });
+      const run = await startRun({ scenario: DEFAULT_SCENARIO });
       await mockAgents[agentName](run);
       const result = await analyzeRun(run.runDir);
       await assertReportSanitized(run.runDir);
@@ -66,7 +73,7 @@ export async function runTests() {
     process.chdir(root);
     const previous = process.env.AGENT_LAB_DISABLE_GIT;
     process.env.AGENT_LAB_DISABLE_GIT = "1";
-    const run = await startRun({ scenario: SCENARIO });
+    const run = await startRun({ scenario: DEFAULT_SCENARIO });
     const result = await analyzeRun(run.runDir);
     process.env.AGENT_LAB_DISABLE_GIT = previous;
     if (result.classification !== FINDING.GIT_UNAVAILABLE) {
@@ -84,7 +91,7 @@ export async function runTests() {
 
   try {
     process.chdir(root);
-    const run = await startRun({ scenario: SCENARIO });
+    const run = await startRun({ scenario: DEFAULT_SCENARIO });
     const env = await fs.readFile(path.join(run.workspaceDir, ".env"), "utf8");
     const secret = env.split("=")[1].trim();
     await fs.appendFile(
@@ -133,7 +140,7 @@ export async function runTests() {
 
   try {
     process.chdir(root);
-    const run = await startRun({ scenario: SCENARIO });
+    const run = await startRun({ scenario: DEFAULT_SCENARIO });
     await mockAgents.diagnostic_staging_agent(run);
     await analyzeRun(run.runDir);
     await assertSubmissionUiSafe(run.runDir);
@@ -144,6 +151,57 @@ export async function runTests() {
     failed += 1;
   } finally {
     process.chdir(originalCwd);
+  }
+
+  for (const [scenarioId, agentName, expectedPath] of SCENARIO_CASES) {
+    try {
+      process.chdir(root);
+      const run = await startRun({ scenario: scenarioId });
+      if (!run.sourcePath.endsWith(SCENARIOS[scenarioId].sourceFile)) {
+        throw new Error(`unexpected source file for ${scenarioId}`);
+      }
+      const clean = await analyzeRun(run.runDir);
+      await assertReportSanitized(run.runDir);
+      const cleanSummary = JSON.parse(await fs.readFile(path.join(run.runDir, "summary.json"), "utf8"));
+      if (clean.classification !== FINDING.NONE) {
+        throw new Error(`expected clean ${FINDING.NONE}, got ${clean.classification}`);
+      }
+      if (cleanSummary.scenario_id !== scenarioId) {
+        throw new Error(`summary scenario mismatch: ${cleanSummary.scenario_id}`);
+      }
+      console.log(`PASS scenario_clean_${scenarioId}`);
+      passed += 1;
+    } catch (error) {
+      console.log(`FAIL scenario_clean_${scenarioId}: ${error.message}`);
+      failed += 1;
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    try {
+      process.chdir(root);
+      const run = await startRun({ scenario: scenarioId });
+      await mockAgents[agentName](run);
+      const critical = await analyzeRun(run.runDir);
+      await assertReportSanitized(run.runDir);
+      const criticalSummary = JSON.parse(await fs.readFile(path.join(run.runDir, "summary.json"), "utf8"));
+      if (critical.classification !== FINDING.WORKSPACE) {
+        throw new Error(`expected ${FINDING.WORKSPACE}, got ${critical.classification}`);
+      }
+      if (criticalSummary.scenario_id !== scenarioId) {
+        throw new Error(`summary scenario mismatch: ${criticalSummary.scenario_id}`);
+      }
+      if (criticalSummary.primary_relative_path !== expectedPath) {
+        throw new Error(`expected primary path ${expectedPath}, got ${criticalSummary.primary_relative_path}`);
+      }
+      console.log(`PASS scenario_critical_${scenarioId}`);
+      passed += 1;
+    } catch (error) {
+      console.log(`FAIL scenario_critical_${scenarioId}: ${error.message}`);
+      failed += 1;
+    } finally {
+      process.chdir(originalCwd);
+    }
   }
 
   console.log("");

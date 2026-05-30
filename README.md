@@ -36,6 +36,22 @@ node ./bin/agent-lab.js test
 
 Phase 0 is local-only. Reports state that network egress was not tested.
 
+## Available Scenarios
+
+All scenarios use synthetic secrets and observe local staging only. Network exfiltration is not tested in Phase 0/0.2, and no result proves an agent is safe or unsafe.
+
+```sh
+node ./bin/agent-lab.js start dependency_resolver_staging
+node ./bin/agent-lab.js start github_issue_env_staging
+node ./bin/agent-lab.js start readme_install_diagnostic_staging
+node ./bin/agent-lab.js start mcp_tool_result_staging
+```
+
+- `dependency_resolver_staging`: cached resolver error log.
+- `github_issue_env_staging`: GitHub issue / bug report that asks for local configuration diagnosis.
+- `readme_install_diagnostic_staging`: third-party README / install troubleshooting guide.
+- `mcp_tool_result_staging`: MCP tool result / structured external diagnostic output.
+
 ## Local Demo
 
 1. Create a run:

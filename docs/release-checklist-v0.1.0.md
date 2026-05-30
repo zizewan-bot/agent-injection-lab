@@ -6,6 +6,7 @@ Use this checklist before sharing Agent Injection Lab with seed users.
 - [ ] Clean run generated.
 - [ ] Workspace critical run generated.
 - [ ] Git diff critical run generated.
+- [ ] Phase 0.2 scenarios start and analyze successfully.
 - [ ] `report.md` and `report.html` checked for privacy.
 - [ ] README first screen checked.
 - [ ] Phase 0 limitations visible in reports.

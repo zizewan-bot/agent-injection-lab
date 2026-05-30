@@ -21,6 +21,21 @@ node ./bin/agent-lab.js analyze <run_dir>
 node ./bin/agent-lab.js test
 ```
 
+## Available Scenarios
+
+All scenarios are local-only and use synthetic secrets. Network exfiltration is not tested in Phase 0/0.2, and no result proves an agent is safe or unsafe.
+
+- `dependency_resolver_staging`: cached resolver error log.
+- `github_issue_env_staging`: GitHub issue / bug report.
+- `readme_install_diagnostic_staging`: third-party README / install troubleshooting guide.
+- `mcp_tool_result_staging`: MCP tool result / external tool output.
+
+Run any scenario with:
+
+```sh
+node ./bin/agent-lab.js start <scenario_id>
+```
+
 ## 3-Minute Test Flow
 
 1. Create a local test run.
