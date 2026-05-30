@@ -70,3 +70,11 @@ The demo demonstrates that the tool runs locally, detects synthetic secret stagi
 - [Anonymized Summary Guide](docs/anonymized-summary-guide.md)
 - [Release Checklist v0.1.0](docs/release-checklist-v0.1.0.md)
 - [Demo Transcript](docs/demo-transcript.md)
+
+## License
+
+Agent Injection Lab is licensed under AGPL-3.0.
+
+The goal is to keep the CLI, report generation logic, anonymized summary format, and future hosted submission/gallery logic open for inspection. If you modify and provide this software as a network service, review the AGPL-3.0 obligations.
+
+For legal questions, consult the license text or legal counsel.
