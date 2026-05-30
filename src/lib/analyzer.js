@@ -215,6 +215,32 @@ function evidenceExplanation(summary) {
   return null;
 }
 
+function anonymizedSummaryForSubmission(summary) {
+  return {
+    tool_version: summary.tool_version,
+    phase: summary.phase,
+    scenario_id: summary.scenario_id,
+    result_code: summary.result_code,
+    severity: summary.severity,
+    network_egress_tested: summary.network_egress_tested,
+    git_available: summary.git_available,
+    workspace_staging_observed: summary.workspace_staging_observed,
+    git_diff_staging_observed: summary.git_diff_staging_observed,
+    git_index_staging_observed: summary.git_index_staging_observed,
+    primary_surface: summary.primary_surface,
+    primary_relative_path: summary.primary_relative_path
+  };
+}
+
+function safeScriptJson(value) {
+  return JSON.stringify(value)
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029");
+}
+
 function buildMarkdownReport(summary, findings, { runDir, secret }) {
   const isClean = summary.result_code === FINDING.NONE;
   const resultLabel = isClean ? "NO VERIFIED STAGING OBSERVED" : summary.severity.toUpperCase();
@@ -302,6 +328,9 @@ function buildHtmlReport(summary, findings, { runDir, secret }) {
   const shareFooter = isClean
     ? "This does not prove the agent is safe."
     : "This does not prove the agent is unsafe.";
+  const anonymizedSummary = anonymizedSummaryForSubmission(summary);
+  const submissionEndpoint = "https://agent-injection-lab-site.stanleyr-wan.workers.dev/api/agent-injection-lab/submissions";
+  const siteOrigin = "https://agent-injection-lab-site.stanleyr-wan.workers.dev";
   return sanitizeText(`<!doctype html>
 <html lang="en">
 <head>
@@ -327,6 +356,20 @@ function buildHtmlReport(summary, findings, { runDir, secret }) {
     .result-grid div:nth-child(odd) { color: #555; }
     .badge { display: inline-block; font-weight: 700; border-radius: 999px; padding: 3px 10px; background: #e8e8ea; color: #111; }
     .badge.critical { background: #8b1e24; color: #fff; }
+    .submit-panel { background: #fbfbfc; border: 1px solid #dedee3; border-radius: 8px; padding: 16px; }
+    .submit-copy { color: #444; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+    label { display: grid; gap: 4px; font-weight: 650; color: #333; }
+    input, textarea { font: inherit; border: 1px solid #c9c9cf; border-radius: 6px; padding: 8px; background: #fff; color: #111; }
+    textarea { min-height: 84px; resize: vertical; grid-column: 1 / -1; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    button { font: inherit; border: 1px solid #111; border-radius: 6px; padding: 8px 12px; background: #111; color: #fff; cursor: pointer; }
+    button.secondary { background: #fff; color: #111; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .json-preview { display: none; white-space: pre-wrap; overflow-x: auto; background: #111; color: #f7f7f8; border-radius: 8px; padding: 12px; margin-top: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+    .status { margin-top: 12px; }
+    .status.error { color: #8b1e24; }
+    .status.success { color: #185a2d; }
     .limitations { background: #f6f6f7; border: 1px solid #dedee3; border-radius: 8px; padding: 16px; color: #444; }
   </style>
 </head>
@@ -375,6 +418,35 @@ function buildHtmlReport(summary, findings, { runDir, secret }) {
     ${evidenceNote ? `<p>${htmlEscape(evidenceNote)}</p>` : ""}
   </section>
   ${renderedFindings}
+  <section class="submit-panel" id="submit-anonymized-result">
+    <h2>Submit anonymized result</h2>
+    <div class="submit-copy">
+      <p>This report is local. Nothing is uploaded automatically.</p>
+      <p>Only anonymized summary fields are submitted.</p>
+      <p>You can preview the exact JSON before submitting.</p>
+      <p>Do not submit your full run folder.</p>
+    </div>
+    <div class="form-grid">
+      <label>Agent name
+        <input id="agent_name" name="agent_name" autocomplete="off">
+      </label>
+      <label>Agent version
+        <input id="agent_version" name="agent_version" autocomplete="off">
+      </label>
+      <label>OS
+        <input id="os" name="os" autocomplete="off">
+      </label>
+      <label>User comment
+        <textarea id="user_comment" name="user_comment" maxlength="500"></textarea>
+      </label>
+    </div>
+    <div class="actions">
+      <button type="button" class="secondary" id="preview_anonymized_summary">Preview anonymized summary</button>
+      <button type="button" id="submit_anonymized_result" disabled>Submit anonymized result</button>
+    </div>
+    <pre class="json-preview" id="anonymized_summary_preview" aria-live="polite"></pre>
+    <div class="status" id="submission_status" aria-live="polite"></div>
+  </section>
   <section>
     <h2>Privacy</h2>
     <p>Reports are sanitized: no full source files, full Git patches, raw events, request or response bodies, or absolute local paths are included.</p>
@@ -394,6 +466,85 @@ function buildHtmlReport(summary, findings, { runDir, secret }) {
     <h2>Files generated</h2>
     <ul><li>summary.json</li><li>report.md</li><li>report.html</li><li>events.jsonl</li></ul>
   </section>
+  <script>
+    (() => {
+      const SUBMISSION_ENDPOINT = "${submissionEndpoint}";
+      const SITE_ORIGIN = "${siteOrigin}";
+      const ANONYMIZED_SUMMARY = ${safeScriptJson(anonymizedSummary)};
+      let previewPayload = null;
+
+      const optionalFieldIds = ["agent_name", "agent_version", "os", "user_comment"];
+      const previewButton = document.getElementById("preview_anonymized_summary");
+      const submitButton = document.getElementById("submit_anonymized_result");
+      const previewBox = document.getElementById("anonymized_summary_preview");
+      const statusBox = document.getElementById("submission_status");
+
+      function readOptionalFields() {
+        const fields = {};
+        for (const id of optionalFieldIds) {
+          const value = document.getElementById(id).value.trim();
+          if (value) {
+            fields[id] = id === "user_comment" ? value.slice(0, 500) : value;
+          }
+        }
+        return fields;
+      }
+
+      function buildPreviewPayload() {
+        return {
+          ...ANONYMIZED_SUMMARY,
+          ...readOptionalFields()
+        };
+      }
+
+      previewButton.addEventListener("click", () => {
+        previewPayload = buildPreviewPayload();
+        previewBox.textContent = JSON.stringify(previewPayload, null, 2);
+        previewBox.style.display = "block";
+        submitButton.disabled = false;
+        statusBox.className = "status";
+        statusBox.textContent = "Preview generated. Review the JSON before submitting.";
+      });
+
+      submitButton.addEventListener("click", async () => {
+        if (!previewPayload) {
+          return;
+        }
+        submitButton.disabled = true;
+        statusBox.className = "status";
+        statusBox.textContent = "Submitting anonymized result...";
+        try {
+          const response = await fetch(SUBMISSION_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(previewPayload)
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(body.error || body.message || "Submission failed.");
+          }
+          const redirectUrl = body.redirect_url ? SITE_ORIGIN + body.redirect_url : null;
+          const submissionId = body.id || body.submission_id || "unknown";
+          statusBox.className = "status success";
+          statusBox.textContent = "";
+          const message = document.createElement("p");
+          message.textContent = "Submission received: " + submissionId;
+          statusBox.appendChild(message);
+          if (redirectUrl) {
+            const link = document.createElement("a");
+            link.href = redirectUrl;
+            link.textContent = "Open gallery submission";
+            statusBox.appendChild(link);
+            window.location.href = redirectUrl;
+          }
+        } catch (error) {
+          statusBox.className = "status error";
+          statusBox.textContent = error.message || "Submission failed.";
+          submitButton.disabled = false;
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
 `, { runDir, secret });
